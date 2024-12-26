@@ -5,18 +5,19 @@ export type message = {
   context: string;
 };
 
-export type messageListContext = {
+export type chattingContext = {
   messageList: message[];
   addMessage: (message: message) => void;
   userId: string;
+  ws: WebSocket | null;
 };
 
-export const MessageListContext = createContext<messageListContext | undefined>(
+export const ChattingContext = createContext<chattingContext | undefined>(
   undefined
 );
 
 export const useMessageList = () => {
-  const context = useContext(MessageListContext);
+  const context = useContext(ChattingContext);
   if (!context) {
     throw new Error("useMessageList must be used within MessageListProvider");
   }

@@ -5,12 +5,14 @@ const InputContainer = () => {
   // state
   const [msg, setMsg] = useState("");
   // hooks
-  const { addMessage } = useMessageList();
+  const { addMessage, ws } = useMessageList();
   // handler
   const handleSendMsg = () => {
+    if (!ws) return;
     console.log(msg);
     const msgTrim = msg.trim();
     if (!msgTrim) return;
+    ws.send(msgTrim);
     addMessage({
       id: "2",
       context: msgTrim,
