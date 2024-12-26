@@ -2,6 +2,9 @@ import asyncio
 import redis.asyncio as aioredis
 from aiohttp import web
 
+# Room name
+ROOM_NAME = "lablup"
+
 # Redis 연결 정보
 REDIS_URL = "redis://localhost:6379"
 
@@ -28,12 +31,11 @@ async def websocket_handler(request):
     ws = web.WebSocketResponse()
     await ws.prepare(request)
 
-    room_name = request.query.get("room", "default")
     client_address = request.remote
-    print(f"클라이언트 연결됨: {client_address}, 룸: {room_name}")
+    print(f"클라이언트 연결됨: {client_address}, 룸: {ROOM_NAME}")
 
     # Redis에서 메시지 구독 (비동기 작업 실행)
-    subscriber_task = asyncio.create_task(redis_subscriber(room_name, ws))
+    subscriber_task = asyncio.create_task(redis_subscriber(ROOM_NAME, ws))
 
     redis = await aioredis.from_url(REDIS_URL)
     try:
@@ -42,7 +44,7 @@ async def websocket_handler(request):
                 # 메시지 Redis 채널로 Publish
                 message = f"[{client_address}] {msg.data}"
                 print(message)
-                await redis.publish(room_name, message)
+                await redis.publish(ROOM_NAME, message)
             elif msg.type == web.WSMsgType.CLOSE:
                 print(f"클라이언트 연결 종료: {client_address}")
                 break
@@ -58,7 +60,7 @@ async def websocket_handler(request):
 # HTTP 서버 초기화
 async def init_app():
     app = web.Application()
-    app.router.add_get('/ws', websocket_handler)  # WebSocket 경로
+    app.router.add_get('/chat', websocket_handler)  # WebSocket 경로
     return app
 
 # 서버 실행
