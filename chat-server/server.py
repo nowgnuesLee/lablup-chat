@@ -2,7 +2,11 @@ import asyncio
 import redis.asyncio as aioredis
 from aiohttp import web
 import json
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 import multiprocessing
+
+# Max processes
+MAX_PROCESSES = 5
 
 # Room name
 ROOM_NAME = "lablup"
@@ -92,23 +96,24 @@ async def init_app():
 
 
 def start_server():
+    print(f"서버 시작됨: {multiprocessing.current_process().pid}")
+    try:
         web.run_app(init_app(), host='127.0.0.1', port=8080, reuse_port=True)
+    except Exception as e:
+        raise e
+    finally:
+        print(f"서버 종료됨: {multiprocessing.current_process().pid}")
 
 # 서버 실행
 if __name__ == '__main__':
-    num_processes = multiprocessing.cpu_count()
-    print(f"서버 시작: CPU 코어 수 {num_processes}")
-    processes = []
     try:
-        for _ in range(num_processes):
-            p = multiprocessing.Process(target=start_server)
-            p.start()
-            processes.append(p)
-
-        for p in processes:
-            p.join()
+        with ProcessPoolExecutor(max_workers=MAX_PROCESSES) as executor:
+            futures = [executor.submit(start_server) for _ in range(MAX_PROCESSES)]
+            for future in futures:
+                try:
+                    future.result()
+                except Exception as e:
+                    print(f"에러 발생: {e}")
     except KeyboardInterrupt:
-        print("서버 종료됨")
-        for p in processes:
-            p.terminate()
-            p.join()
+        print("종료됨")
+
