@@ -5,7 +5,7 @@ const InputContainer = () => {
   // state
   const [msg, setMsg] = useState("");
   // hooks
-  const { addMessage, ws } = useMessageList();
+  const { addMessage, ws, userId } = useMessageList();
   // handler
   const handleSendMsg = () => {
     if (!ws) return;
@@ -14,8 +14,9 @@ const InputContainer = () => {
     if (!msgTrim) return;
     ws.send(msgTrim);
     addMessage({
-      id: "2",
-      context: msgTrim,
+      type: "message",
+      userId,
+      message: msgTrim,
     });
     setMsg("");
   };
@@ -40,7 +41,7 @@ const InputContainer = () => {
       <textarea
         name="message"
         className="w-full h-24 p-1 text-black bg-[#F6F6F6] rounded-md outline-none border"
-        placeholder="Type a message"
+        placeholder={`${userId}, type a message...`}
         style={{
           resize: "none",
         }}

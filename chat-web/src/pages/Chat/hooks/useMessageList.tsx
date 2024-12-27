@@ -1,8 +1,9 @@
 import { createContext, useContext } from "react";
 
 export type message = {
-  id: string;
-  context: string;
+  type: string;
+  userId: string;
+  message: string;
 };
 
 export type chattingContext = {

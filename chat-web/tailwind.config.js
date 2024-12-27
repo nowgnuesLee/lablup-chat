@@ -9,5 +9,20 @@ export default {
       },
     },
   },
-  plugins: [],
+  plugins: [
+    ({ addUtilities }) => {
+      addUtilities({
+        ".scrollbar-hide": {
+          /* Firefox */
+          "scrollbar-width": "none",
+          /* IE */
+          "-ms-overflow-style": "none",
+          /* Webkit */
+          "&::-webkit-scrollbar": {
+            display: "none",
+          },
+        },
+      });
+    },
+  ],
 };
