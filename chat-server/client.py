@@ -23,10 +23,10 @@ async def receive_messages(websocket):
             break
 
 
-async def client(room_name):
-    uri = f"ws://127.0.0.1:8080/ws?room={room_name}"
+async def client():
+    uri = f"ws://127.0.0.1:8080/chat"
     async with websockets.connect(uri) as websocket:
-        print(f"'{room_name}' 룸에 연결됨")
+        print("룸에 연결됨")
 
         # 송신 및 수신을 각각 비동기 태스크로 실행
         send_task = asyncio.create_task(send_messages(websocket))
@@ -44,5 +44,4 @@ async def client(room_name):
 
 
 if __name__ == "__main__":
-    room_name = input("룸 이름 입력: ")
-    asyncio.run(client(room_name))
+    asyncio.run(client())
