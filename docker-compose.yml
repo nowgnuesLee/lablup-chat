@@ -1,0 +1,22 @@
+services:
+  redis:
+    networks:
+      - chat_network
+    image: redis:7.2.4-alpine
+    restart: always
+    container_name: chat-redis
+    ports:
+      - "4937:6379"
+
+  react:
+    networks:
+      - chat_network
+    restart: always
+    container_name: chat-front
+    image: chat-front:latest
+    ports:
+      - "3001:80"
+
+networks:
+  chat_network:
+    driver: bridge
