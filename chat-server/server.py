@@ -1,9 +1,9 @@
 import asyncio
-import redis.asyncio as aioredis
-from aiohttp import web
 import json
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 import multiprocessing
+from aiohttp import web
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+import redis.asyncio as aioredis
 
 # Max processes
 MAX_PROCESSES = 5
@@ -14,9 +14,10 @@ ROOM_NAME = "lablup"
 # Redis 연결 정보
 REDIS_URL = "redis://localhost:6379"
 
+
 # Redis Pub/Sub
-async def redis_subscriber(room_name, ws):
-    redis = await aioredis.from_url(REDIS_URL)
+async def redis_subscriber(room_name, ws, redis):
+    """Redis 채널 구독"""
     try:
         pubsub = redis.pubsub()
         await pubsub.subscribe(room_name)
@@ -30,9 +31,10 @@ async def redis_subscriber(room_name, ws):
         print(f"Redis 구독 취소됨: {room_name}")
     finally:
         await pubsub.unsubscribe(room_name)
-        await redis.close()
+
 
 async def rcv_msg(ws, redis, client_name, client_address):
+    """웹 소켓에서 메시지를 수신하고 Redis 채널로 Publish"""
     try:
         async for msg in ws:
             if msg.type == web.WSMsgType.TEXT:
@@ -52,12 +54,12 @@ async def rcv_msg(ws, redis, client_name, client_address):
 
 # WebSocket 핸들러
 async def websocket_handler(request):
-
+    """웹 소켓 핸들러"""
     ws = web.WebSocketResponse()
-    await ws.prepare(request) # WebSocket 연결 준비
+    await ws.prepare(request)  # WebSocket 연결 준비
 
     redis = None
-    subscriber_task = None
+    tasks = []
 
     try:
         redis = await aioredis.from_url(REDIS_URL)
@@ -66,46 +68,60 @@ async def websocket_handler(request):
         user_count = await redis.incr("user_count")
         client_name = f"User{user_count}"
         client_address = request.remote
-        print(f"클라이언트 연결됨: {client_address}, 룸: {ROOM_NAME}, 이름: {client_name}")
+        print(
+            f"클라이언트 연결됨: {client_address}, 룸: {ROOM_NAME}, 이름: {client_name}"
+        )
 
         # 클라이언트에 이름 전달
-        await ws.send_json({"type": "info", "userId": client_name, "message": f"Welcome! Your name is: {client_name}"})
+        await ws.send_json(
+            {
+                "type": "info",
+                "userId": client_name,
+                "message": f"Welcome! Your name is: {client_name}",
+            }
+        )
 
         # Redis에서 메시지 구독 (비동기 작업 실행)
-        subscriber_task = asyncio.create_task(redis_subscriber(ROOM_NAME, ws))
-        receiver_task = asyncio.create_task(rcv_msg(ws, redis, client_name, client_address))
-        
+        tasks = [
+            asyncio.create_task(redis_subscriber(ROOM_NAME, ws, redis)),
+            asyncio.create_task(rcv_msg(ws, redis, client_name, client_address)),
+        ]
+
+        await asyncio.gather(*tasks)
+
     except Exception as e:
         print(f"에러 발생: {e}")
     finally:
         # WebSocket 종료 시 Redis 구독 취소
-        if subscriber_task:
-            subscriber_task.cancel()
-        if receiver_task:
-            receiver_task.cancel()
+        for task in tasks:
+            task.cancel()
         if redis:
             await redis.close()
 
     return ws
 
+
 # HTTP 서버 초기화
 async def init_app():
+    """HTTP 서버 초기화"""
     app = web.Application()
-    app.router.add_get('/chat', websocket_handler)  # WebSocket 경로
+    app.router.add_get("/chat", websocket_handler)  # WebSocket 경로
     return app
 
 
 def start_server():
+    """HTTP 서버 시작"""
     print(f"서버 시작됨: {multiprocessing.current_process().pid}")
     try:
-        web.run_app(init_app(), host='127.0.0.1', port=8080, reuse_port=True)
+        web.run_app(init_app(), host="127.0.0.1", port=8080, reuse_port=True)
     except Exception as e:
         raise e
     finally:
         print(f"서버 종료됨: {multiprocessing.current_process().pid}")
 
+
 # 서버 실행
-if __name__ == '__main__':
+if __name__ == "__main__":
     try:
         with ProcessPoolExecutor(max_workers=MAX_PROCESSES) as executor:
             futures = [executor.submit(start_server) for _ in range(MAX_PROCESSES)]
@@ -116,4 +132,3 @@ if __name__ == '__main__':
                     print(f"에러 발생: {e}")
     except KeyboardInterrupt:
         print("종료됨")
-
