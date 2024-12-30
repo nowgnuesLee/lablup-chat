@@ -1,0 +1,48 @@
+services:
+  redis:
+    networks:
+      - chat_network
+    image: redis:7.2.4-alpine
+    restart: always
+    container_name: chat-redis
+    ports:
+      - "4937:6379"
+
+  react:
+    networks:
+      - chat_network
+    restart: always
+    container_name: chat-front
+    build:
+      context: .
+      dockerfile: frontend.Dockerfile
+      args:
+        - SERVER_HOST=localhost
+        - SERVER_PORT=8081
+    ports:
+      - "3001:80"
+
+  server:
+    networks:
+      - chat_network
+    restart: always
+    container_name: chat-server
+    build:
+      context: .
+      dockerfile: backend.Dockerfile
+    ports:
+      - "8081:8080"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8080
+      - REDIS_HOST=chat-redis
+      - REDIS_PORT=6379
+      - ROOM_NAME=lablup
+      - MAX_PROCESSES=5
+    depends_on:
+      - redis
+
+
+networks:
+  chat_network:
+    driver: bridge
