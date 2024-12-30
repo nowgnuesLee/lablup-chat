@@ -30,4 +30,7 @@ jobs:
     - name: Result of testing
       run: |
         docker ps -a
+    
+    - name: Logs of Backend
+      run: |
         docker logs chat-server
