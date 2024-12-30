@@ -1,6 +1,9 @@
 # base image 설정(as build 로 완료된 파일을 밑에서 사용할 수 있다.)
 FROM node:18-alpine as build
 
+ARG SERVER_HOST
+ARG SERVER_PORT
+
 # 컨테이너 내부 작업 디렉토리 설정
 WORKDIR /app
 
@@ -13,6 +16,9 @@ RUN npm install
 
 # 호스트 머신의 현재 디렉토리 파일들을 컨테이너 내부로 전부 복사
 COPY ./chat-web .
+
+RUN echo "VITE_SERVER_HOST=${SERVER_HOST}" > .env
+RUN echo "VITE_SERVER_PORT=${SERVER_PORT}" >> .env
 
 # npm build
 RUN npm run build
