@@ -3,9 +3,13 @@ import json
 import multiprocessing
 from concurrent.futures import ProcessPoolExecutor
 from typing import cast
+import logging
 from aiohttp import web
 import redis.asyncio as aioredis
 from decouple import config
+
+# 로깅 설정
+logging.basicConfig(level=logging.INFO)
 
 # Max processes
 MAX_PROCESSES: int = config("MAX_PROCESSES", cast=int, default=5)
@@ -32,14 +36,14 @@ async def redis_subscriber(
     try:
         pubsub = redis.pubsub()
         await pubsub.subscribe(room_name)
-        print(f"Redis 채널 구독 시작: {room_name}")
+        logging.info(f"Redis 채널 구독 시작: {room_name}")
 
         # Redis 메시지 수신 및 WebSocket으로 전달
         async for message in pubsub.listen():
             if message["type"] == "message":
                 await ws.send_str(message["data"].decode("utf-8"))
     except asyncio.CancelledError:
-        print(f"Redis 구독 취소됨: {room_name}")
+        logging.info(f"Redis 구독 취소됨: {room_name}")
         raise Exception("Redis 구독 취소됨")
     finally:
         if pubsub:
@@ -64,10 +68,14 @@ async def rcv_msg(
                 }
                 await redis.publish(ROOM_NAME, json.dumps(message_obj))
             elif msg.type == web.WSMsgType.CLOSE:
-                print(f"클라이언트 연결 종료: {client_address}, 이름: {client_name}")
+                logging.info(
+                    f"클라이언트 연결 종료: {client_address}, 이름: {client_name}"
+                )
                 break
             elif msg.type == web.WSMsgType.ERROR:
-                print(f"클라이언트 에러 발생: {client_address}, 이름: {client_name}")
+                logging.info(
+                    f"클라이언트 에러 발생: {client_address}, 이름: {client_name}"
+                )
                 break
     except Exception as e:
         raise e
@@ -89,7 +97,7 @@ async def websocket_handler(request):
         user_count = await redis.incr("user_count")
         client_name = f"User{user_count}"
         client_address = request.remote
-        print(
+        logging.info(
             f"클라이언트 연결됨: {client_address}, 룸: {ROOM_NAME}, 이름: {client_name}"
         )
 
@@ -115,7 +123,7 @@ async def websocket_handler(request):
         await asyncio.gather(*tasks)
 
     except Exception as e:
-        print(f"에러 발생: {e}")
+        logging.error(f"에러 발생: {e}")
     finally:
         for task in tasks:
             task.cancel()
@@ -135,13 +143,14 @@ async def init_app():
 
 def start_server():
     """HTTP 서버 시작"""
-    print(f"서버 시작됨: {multiprocessing.current_process().pid}")
+    logging.info(f"서버 시작됨: {multiprocessing.current_process().pid}")
+    logging.info(f"서버 주소: {HOST}:{PORT}")
     try:
         web.run_app(init_app(), host=HOST, port=PORT, reuse_port=True)
     except Exception as e:
         raise e
     finally:
-        print(f"서버 종료됨: {multiprocessing.current_process().pid}")
+        logging.info(f"서버 종료됨: {multiprocessing.current_process().pid}")
 
 
 # 서버 실행
@@ -153,8 +162,8 @@ if __name__ == "__main__":
                 try:
                     future.result()
                 except asyncio.CancelledError:
-                    print("비동기 작업이 취소되었습니다.")
+                    logging.error("비동기 작업이 취소되었습니다.")
                 except Exception as e:
-                    print(f"알 수 없는 에러가 발생했습니다: {e}")
+                    logging.error(f"알 수 없는 에러가 발생했습니다: {e}")
     except KeyboardInterrupt:
-        print("종료됨")
+        logging.error("종료됨")
