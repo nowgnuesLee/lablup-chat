@@ -27,8 +27,10 @@ jobs:
         chmod +x ./build.sh
         ./build.sh
 
-    - name: Test Docker containers
+    - name: Result of testing
       run: |
-        docker-compose up -d
         docker ps -a
+    
+    - name: Logs of Backend
+      run: |
         docker logs chat-server
