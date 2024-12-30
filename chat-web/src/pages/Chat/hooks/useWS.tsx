@@ -4,7 +4,7 @@ const useWS = () => {
   const [ws, setWS] = useState<WebSocket | null>(null);
 
   useEffect(() => {
-    const ws = new WebSocket("ws://localhost:8080/chat");
+    const ws = new WebSocket("ws://localhost:8081/chat");
 
     ws.onopen = () => {
       console.log("connected");

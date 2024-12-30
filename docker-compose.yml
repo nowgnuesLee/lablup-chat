@@ -13,9 +13,32 @@ services:
       - chat_network
     restart: always
     container_name: chat-front
-    image: chat-front:latest
+    build:
+      context: .
+      dockerfile: frontend.Dockerfile
     ports:
       - "3001:80"
+
+  server:
+    networks:
+      - chat_network
+    restart: always
+    container_name: chat-server
+    build:
+      context: .
+      dockerfile: backend.Dockerfile
+    ports:
+      - "8081:8080"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8080
+      - REDIS_HOST=chat-redis
+      - REDIS_PORT=6379
+      - ROOM_NAME=lablup
+      - MAX_PROCESSES=5
+    depends_on:
+      - redis
+
 
 networks:
   chat_network:
