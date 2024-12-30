@@ -16,6 +16,9 @@ services:
     build:
       context: .
       dockerfile: frontend.Dockerfile
+      args:
+        - SERVER_HOST=localhost
+        - SERVER_PORT=8081
     ports:
       - "3001:80"
 
