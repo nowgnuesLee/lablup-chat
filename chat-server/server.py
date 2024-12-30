@@ -1,23 +1,34 @@
 import asyncio
 import json
 import multiprocessing
+from concurrent.futures import ProcessPoolExecutor
+from typing import cast
 from aiohttp import web
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 import redis.asyncio as aioredis
+from decouple import config
 
 # Max processes
-MAX_PROCESSES = 5
+MAX_PROCESSES: int = config("MAX_PROCESSES", cast=int, default=5)
 
 # Room name
-ROOM_NAME = "lablup"
+ROOM_NAME: str = cast(str, config("ROOM_NAME", default="chat"))
 
 # Redis 연결 정보
-REDIS_URL = "redis://localhost:6379"
+REDIS_HOST: str = cast(str, config("REDIS_HOST", default="localhost"))
+REDIS_PORT: int = cast(int, config("REDIS_PORT", cast=int, default=6379))
+REDIS_URL: str = f"redis://{REDIS_HOST}:{REDIS_PORT}"
+
+# Server config
+HOST: str = cast(str, config("HOST", cast=str, default="127.0.0.1"))
+PORT: int = cast(int, config("PORT", cast=int, default=8080))
 
 
 # Redis Pub/Sub
-async def redis_subscriber(room_name, ws, redis):
+async def redis_subscriber(
+    room_name: str, ws: web.WebSocketResponse, redis: aioredis.Redis
+) -> None:
     """Redis 채널 구독"""
+    pubsub = None
     try:
         pubsub = redis.pubsub()
         await pubsub.subscribe(room_name)
@@ -29,11 +40,18 @@ async def redis_subscriber(room_name, ws, redis):
                 await ws.send_str(message["data"].decode("utf-8"))
     except asyncio.CancelledError:
         print(f"Redis 구독 취소됨: {room_name}")
+        raise Exception("Redis 구독 취소됨")
     finally:
-        await pubsub.unsubscribe(room_name)
+        if pubsub:
+            await pubsub.unsubscribe(room_name)
 
 
-async def rcv_msg(ws, redis, client_name, client_address):
+async def rcv_msg(
+    ws: web.WebSocketResponse,
+    redis: aioredis.Redis,
+    client_name: str,
+    client_address: str,
+) -> None:
     """웹 소켓에서 메시지를 수신하고 Redis 채널로 Publish"""
     try:
         async for msg in ws:
@@ -47,6 +65,9 @@ async def rcv_msg(ws, redis, client_name, client_address):
                 await redis.publish(ROOM_NAME, json.dumps(message_obj))
             elif msg.type == web.WSMsgType.CLOSE:
                 print(f"클라이언트 연결 종료: {client_address}, 이름: {client_name}")
+                break
+            elif msg.type == web.WSMsgType.ERROR:
+                print(f"클라이언트 에러 발생: {client_address}, 이름: {client_name}")
                 break
     except Exception as e:
         raise e
@@ -81,10 +102,14 @@ async def websocket_handler(request):
             }
         )
 
-        # Redis에서 메시지 구독 (비동기 작업 실행)
+        # Redis Pub/Sub 관련 태스크 생성
         tasks = [
-            asyncio.create_task(redis_subscriber(ROOM_NAME, ws, redis)),
-            asyncio.create_task(rcv_msg(ws, redis, client_name, client_address)),
+            asyncio.create_task(
+                redis_subscriber(ROOM_NAME, ws, redis)
+            ),  # Redis 채널 구독
+            asyncio.create_task(
+                rcv_msg(ws, redis, client_name, client_address)
+            ),  # 메시지 수신 및 Redis 채널로 Publish
         ]
 
         await asyncio.gather(*tasks)
@@ -92,7 +117,6 @@ async def websocket_handler(request):
     except Exception as e:
         print(f"에러 발생: {e}")
     finally:
-        # WebSocket 종료 시 Redis 구독 취소
         for task in tasks:
             task.cancel()
         if redis:
@@ -113,7 +137,7 @@ def start_server():
     """HTTP 서버 시작"""
     print(f"서버 시작됨: {multiprocessing.current_process().pid}")
     try:
-        web.run_app(init_app(), host="127.0.0.1", port=8080, reuse_port=True)
+        web.run_app(init_app(), host=HOST, port=PORT, reuse_port=True)
     except Exception as e:
         raise e
     finally:
@@ -128,7 +152,9 @@ if __name__ == "__main__":
             for future in futures:
                 try:
                     future.result()
+                except asyncio.CancelledError:
+                    print("비동기 작업이 취소되었습니다.")
                 except Exception as e:
-                    print(f"에러 발생: {e}")
+                    print(f"알 수 없는 에러가 발생했습니다: {e}")
     except KeyboardInterrupt:
         print("종료됨")
