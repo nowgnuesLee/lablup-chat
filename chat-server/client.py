@@ -1,6 +1,12 @@
 import asyncio
-import websockets
+from typing import cast
 from aioconsole import ainput  # 비동기 입력 처리
+from decouple import config
+import websockets
+
+HOST = cast(str, config("HOST", default="127.0.0.1", cast=str))
+PORT = cast(int, config("PORT", default=8080, cast=int))
+SERVER_URL = f"ws://{HOST}:{PORT}/chat"
 
 
 async def send_messages(websocket):
@@ -24,7 +30,8 @@ async def receive_messages(websocket):
 
 
 async def client():
-    uri = f"ws://127.0.0.1:8080/chat"
+    """웹소켓 클라이언트"""
+    uri = SERVER_URL
     async with websockets.connect(uri) as websocket:
         print("룸에 연결됨")
 
@@ -33,7 +40,7 @@ async def client():
         receive_task = asyncio.create_task(receive_messages(websocket))
 
         # 두 태스크 중 하나가 종료될 때까지 대기
-        done, pending = await asyncio.wait(
+        _, pending = await asyncio.wait(
             [send_task, receive_task],
             return_when=asyncio.FIRST_COMPLETED,
         )
