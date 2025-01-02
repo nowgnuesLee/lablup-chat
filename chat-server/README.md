@@ -22,7 +22,7 @@ MAX_PROCESSES=NUMBER_OF_PROCESSES
 ROOM_NAME=ROOM_NAME
 ```
 ## Simulation
-You can interact with the running chat server through client.py. You can run multiple clients to simulate a scenario with multiple clients.
+You can interact with the running chat server through `client.py`. You can run multiple clients to simulate a scenario with multiple clients.
 ### Run Client
 ```bash
 python client.py
