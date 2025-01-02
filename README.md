@@ -11,7 +11,7 @@ This repository includes both the chat server and the chat web application
 * `README.md`: This file
 ## Run Automatically
 Since Docker Compose is used for automatic execution, Docker installation is required.
-### 권한 부여
+### Granting Permissions
 ```bash
 chmod +x ./build.sh
 ```
