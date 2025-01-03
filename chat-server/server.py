@@ -10,10 +10,10 @@ import redis.asyncio as aioredis
 from decouple import config
 
 # 로깅 설정
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 
 # Max processes
-MAX_PROCESSES: int = config("MAX_PROCESSES", cast=int, default=5)
+MAX_PROCESSES: int = cast(int, config("MAX_PROCESSES", cast=int, default=5))
 
 # Room name
 ROOM_NAME: str = cast(str, config("ROOM_NAME", default="chat"))
@@ -35,15 +35,29 @@ async def redis_subscriber(
     """Redis 채널 구독 및 메시지 수신"""
     try:
         async with redis.pubsub() as pubsub:
-            await pubsub.subscribe(room_name)
-            logging.info("Redis 구독: %s", room_name)
+            try:
+                await pubsub.subscribe(room_name)
+                logging.info("Redis 구독: %s", room_name)
 
-            # Redis 메시지 수신 및 WebSocket으로 전달
-            async for message in pubsub.listen():
-                if message["type"] == "message":
-                    await ws.send_str(message["data"].decode("utf-8"))
+                # Redis 메시지 수신 및 WebSocket으로 전달
+                async for message in pubsub.listen():
+                    if message["type"] == "message":
+                        await ws.send_str(message["data"].decode("utf-8"))
+            except asyncio.CancelledError:
+                logging.info("Redis 구독 코루틴 종료")
+            except Exception as e:
+                logging.error("Redis 구독 중 에러 발생: %s", e)
+            finally:
+                await pubsub.unsubscribe(room_name)
+                logging.info("Redis 구독 취소: %s", room_name)
     except asyncio.CancelledError:
-        logging.error("Redis 구독 취소됨: %s", room_name)
+        logging.info("Redis Pub/Sub 연결 코루틴 취소됨")
+    except Exception as e:
+        logging.error("Redis 구독 에러: %s", e)
+    finally:
+        await redis.pubsub().close()
+        logging.info("Redis Pub/Sub 연결 코루틴 종료")
+        raise Exception("Redis Pub/Sub 연결 코루틴 종료")
 
 
 async def rcv_msg(
@@ -57,6 +71,13 @@ async def rcv_msg(
         async for msg in ws:
             if msg.type == web.WSMsgType.TEXT:
                 # 메시지 Redis 채널로 Publish
+                if msg.data == "close":
+                    logging.info(
+                        "클라이언트 연결 종료, 주소: %s, 유저 아이디: %s",
+                        client_address,
+                        user_id,
+                    )
+                    break
                 message_obj = {
                     "type": "message",
                     "userId": user_id,
@@ -77,8 +98,13 @@ async def rcv_msg(
                     user_id,
                 )
                 break
+    except asyncio.CancelledError:
+        logging.info("메시지 수신 코루틴 취소됨")
     except Exception as e:
         logging.error("메시지 수신 중 에러 발생: %s", e)
+    finally:
+        logging.info("메시지 수신 코루틴 종료")
+        raise Exception("메시지 수신 코루틴 종료")
 
 
 # WebSocket 핸들러
@@ -112,15 +138,34 @@ async def websocket_handler(request):
                     tg.create_task(rcv_msg(ws, redis, user_id, client_address))
                     tg.create_task(redis_subscriber(ROOM_NAME, ws, redis))
             except asyncio.CancelledError:
-                logging.info("비동기 작업이 취소되었습니다.")
+                logging.info("TaskGroup 비동기 작업이 취소되었습니다.")
+            except ExceptionGroup as eg:
+                for err in eg.args:
+                    logging.error("TaskGroup 중 에러 발생: %s", err)
+    except asyncio.CancelledError:
+        logging.info("소켓 처리 코루틴 종료")
     except Exception as e:
         logging.error("소켓 처리 중 에러 발생: %s", e)
-
     finally:
-        await ws.close()
+        if not ws.closed:
+            await ws.close()
         logging.info("클라이언트 연결 종료")
 
     return ws
+
+
+# 비동기 작업 취소
+async def cleanup_tasks(_: web.Application):
+    """비동기 작업 취소"""
+    tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+    for task in tasks:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logging.error("cleanup_task 중 에러 발생: %s", e)
 
 
 # HTTP 서버 초기화
@@ -128,6 +173,7 @@ async def init_app():
     """HTTP 서버 초기화"""
     app = web.Application()
     app.router.add_get("/chat", websocket_handler)  # WebSocket 경로
+    app.on_shutdown.append(cleanup_tasks)  # 서버 종료 시 비동기 작업 취소
     return app
 
 
@@ -145,12 +191,17 @@ def start_server():
 
 # 서버 실행
 if __name__ == "__main__":
+    max_processes = min(MAX_PROCESSES, multiprocessing.cpu_count())
     try:
-        with ProcessPoolExecutor(max_workers=MAX_PROCESSES) as executor:
-            futures = [executor.submit(start_server) for _ in range(MAX_PROCESSES)]
+        with ProcessPoolExecutor(max_workers=max_processes) as executor:
+            futures = [executor.submit(start_server) for _ in range(max_processes)]
             for future in futures:
                 try:
                     future.result()
+                except asyncio.CancelledError:
+                    logging.info("비동기 작업이 취소되었습니다.")
+                except KeyboardInterrupt:
+                    logging.error("서버 종료됨")
                 except Exception as e:
                     logging.error("서버 실행 중 에러 발생: %s", e)
     except KeyboardInterrupt:

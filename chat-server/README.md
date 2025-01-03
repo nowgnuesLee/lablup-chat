@@ -1,7 +1,7 @@
 # Chat Server
 A chat server developed using aiohttp, asyncio, and Redis.
 ## Getting Started
-We are currently using Python version 3.12.6. Since Redis is being used, Redis installation is required.
+Currently using Python version 3.12.6. Since Redis is being used, Redis installation is required.
 ### Installation With pip
 ``` bash
 pip install -r requirements.txt
