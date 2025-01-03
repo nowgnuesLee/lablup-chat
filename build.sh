@@ -7,7 +7,7 @@ PORT=3001
 
 # 도커 컴포즈 기준으로 컨테이너 내리기
 echo "Stopping and removing existing Docker container..."
-docker compose -f $DOCKER_COMPOSE_FILE down || true
+docker compose -f $DOCKER_COMPOSE_FILE down --rmi all || true
 
 # 도커 컴포즈 기준으로 컨테이너 올리기
 echo "Starting Docker container..."
