@@ -10,7 +10,7 @@ const BasicLayout = () => {
             alt="lablup"
           />
         </div>
-        <div className="w-full shadow-2xl md:max-w-screen-md">
+        <div className="w-full shadow-2xl md:max-w-screen-sm">
           <Outlet />
         </div>
       </div>
